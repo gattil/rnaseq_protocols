@@ -1,0 +1,401 @@
+---
+title: "A. Buttgereit et al. (2016), RNA-Seq analysis protocol"
+author: "Lorenzo Gatti & Juliana Komuczki"
+date: "28 November 2016"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+    pandoc_args: [
+        "--number-sections",
+        "--number-offset=1"
+      ]
+    theme: lumen
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+library("rmarkdown", lib.loc="~/Library/R/3.2/library")
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+Total RNA was isolated from FACS-sorted microglia (≥2.5 × 105 cells) using theRNeasy micro plus kit (Qiagen). 2 ng RNA were amplified using the Ovation Single Cell RNA-seq System kit (Nugen). Next generation sequencing was performed using the HiSeq 2500 v4 System (Illumina) and libraries were prepared for single-end RNA-seq sequencing. 
+
+Quality control included the `fastqc` analysis and data normalization was done using the `DESeq2` protocol. GO pathway analysis was performed using the `MetaCore` software (Thomson Reuters) and visualization was done using the `MultiExperiment Viewer (TM4)` and `Prism` (GraphPad).
+
+Data are representative of 3–5 mice pooled per genotype and biological replicate: 3 replicates for each experiment Sall1fl/fl, Sall1CreER/fl; 1 replicate for the experiment Cx3cr1CreERSall1fl/fl.
+
+
+## Download and prepare the raw data
+
+The full sample-data for the experiments published in A. Buttgereit et al (2016) are as follows:
+
+| Source  |  Organism  | Genotype  | Material   | Library  | File |
+|---------|-----|---|---|---|---|
+| Sample1 | Mus Musculus  | 	Sall1fl/fl  | RNA | SINGLE  | [ERR1633606](ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/006/ERR1633606/ERR1633606.fastq.gz) |
+| Sample2 | Mus Musculus  | 	Sall1fl/fl  | RNA    | SINGLE  | 	[ERR1633607](ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_con_R1.fastq.gz) | 
+| Sample3 | Mus Musculus  | 	Sall1fl/fl  | RNA  | SINGLE  | [ERR1633608](ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_con_R1.fastq.gz) | 
+| Sample4 | Mus Musculus  | 	Sall1CreER/fl  | RNA  |  SINGLE | 	[ERR1633609](ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140328_Sall1Cre_R1.fastq.gz) |
+| Sample5 | Mus Musculus  | 	Sall1CreER/fl  | RNA  |  SINGLE | [ERR1633610](ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_Sall1Cre_R1.fastq.gz)	|
+| Sample6 | Mus Musculus  | 	Sall1CreER/fl  | RNA  |  SINGLE | [ERR1633611](ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/001/ERR1633611/ERR1633611.fastq.gz) |
+| Sample7 | Mus Musculus  |   Cx3cr1CreER Sall1fl/fl  | RNA   | SINGLE  | 	[ERR1633612](ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/002/ERR1633612/ERR1633612.fastq.gz) |
+
+### Download of the FASTQ files 
+```bash
+mkdir E-MTAB-5077
+cd E-MTAB-5077
+mkdir data
+cd data
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/006/ERR1633606/ERR1633606.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_con_R1.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_con_R1.fastq.gz (****)
+wget ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140328_Sall1Cre_R1.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/ERA705/ERA705864/fastq/20150521.A-140717_Sall1Cre_R1.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/001/ERR1633611/ERR1633611.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR163/002/ERR1633612/ERR1633612.fastq.gz
+cd ..
+```  
+
+### Download reference genome
+
+Data repository for Mus Musculus Release M3 (GRCm38.p3): https://www.gencodegenes.org/mouse_releases/3.html
+```bash
+mkdir reference
+cd reference
+wget ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M3/GRCm38.p3.genome.fa.gz
+cd ..
+```
+
+### Download annotations 
+```bash
+mkdir annotations
+cd annotations
+wget ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M3/gencode.vM3.chr_patch_hapl_scaff.annotation.gff3.gz
+cd ..
+```
+
+### Exploding archives
+```bash
+cd data
+gunzip ERR1633606.fastq.gz
+gunzip ERR1633607.fastq.gz
+gunzip ERR1633608.fastq.gz
+gunzip ERR1633609.fastq.gz
+gunzip ERR1633610.fastq.gz
+gunzip ERR1633611.fastq.gz
+gunzip ERR1633612.fastq.gz
+cd ../reference
+gunzip GRCm38.p3.genome.fa.gz
+cd ../annotations
+gunzip gencode.vM3.chr_patch_hapl_scaff.annotation.gff3.gz
+```
+
+## Preparing annotation files
+
+Conversion utility can be downloaded here: http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/
+
+```bash
+gff3ToGenePred gencode.vM3.chr_patch_hapl_scaff.annotation.gff3 gencode.vM3.chr_patch_hapl_scaff.annotation.Gp
+genePredToBed gencode.vM3.chr_patch_hapl_scaff.annotation.Gp gencode.vM3.chr_patch_hapl_scaff.annotation.bed
+```
+
+## Quality control and pre-processing of reads
+
+Quality control prior to read alignment of the unprocessed reads can be obtained using the utilif [FASTQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/). However, reads contain sequencing adaptor must be trimmed in order to remove the contamination. Sequencing adaptor is platform dependent, and for HiSeq 2500 v4 System (Illumina) the adapter sequence is contained in the file TruSeq3-SE.fa (?). Trimmomatic (Bolger et al. 2014) software is used to generate high quality reads with the following parameters
+
+    HEADCROP:5
+    MINLEN:50
+    AVGQUAL:20
+    ILLUMINACLIP:/usr/local/ngseq/src/Trimmomatic-0.36/adapters/TruSeq3-SE.fa:2:30:10
+
+
+Each read will be processed deleting the adapter and the first 5 bases. As additional filtering, the program will consider reads with an average quality of 20 and a minimum lenght of 50 bases. The complete sequence of commands is as follows:
+
+```bash
+    cd ../
+    mkdir fastqc
+    fastqc –t 8 –o fastqc data/*.fastq.gz
+    cd data
+    trimmomatic-0.36.jar SE -threads 8 -phred33 {filename}.fastq.gz {filename}.tr.fastq ILLUMINACLIP:{Trimmomatic-directory}/adapters/TruSeq3-SE.fa:2:30:10 HEADCROP:5  MINLEN:50 AVGQUAL:20
+```
+
+Where `{filename}` is a fastq file in the directory `data`, and `{Trimmomatic-directory}` is the full-path where Trimmomatic software has been installed.
+
+
+## Aligning reads to a reference genome
+
+Alignment of reads to the reference genome is perfomed using STAR (Dobin et al. 2013) [^1]. The alignment process requires several steps:
+
+- creation of the index based on the reference genome
+- alignment of the pre-processed reads to the reference genome using the pre-computed index
+
+```bash
+cd ../reference
+mkdir STARIndex
+STAR --runMode genomeGenerate --genomeDir ./STARIndex --genomeChrBinNbits 16 --limitGenomeGenerateRAM 30000000000 --genomeFastaFiles GRCm38.p3.genome.fa --sjdbGTFtagExonParentTranscript Parent --sjdbGTFfile gencode.vM3.chr_patch_hapl_scaff.annotation.gff3 --sjdbOverhang 124 --runThreadN 8
+cd ../
+mkdir Map_STAR
+cd Map_STAR
+```
+
+The alignment command must be issued independently per each pre-processed read file in the `data` folder.
+
+```bash
+STAR --genomeDir ../reference/STARIndex/ --sjdbOverhang 124 --readFilesIn {pre-processed-fastq-file}.tr.fastq --runThreadN 8 --outFilterType BySJout --outFilterMatchNmin 30 --outFilterMismatchNmax 10 --outFilterMismatchNoverLmax 0.05 --alignSJDBoverhangMin 1 --alignSJoverhangMin 8 --alignIntronMax 1000000 --alignMatesGapMax 1000000 --outFilterMultimapNmax 50 --chimSegmentMin 15 --chimJunctionOverhangMin 15 --chimScoreMin 15 --chimScoreSeparation 10 --outSAMstrandField intronMotif --outStd BAM_Unsorted --outSAMtype BAM Unsorted > {SAMPLE-NAME}.bam
+```
+
+The output of the alignment process is an unsorted BAM file, therefore in order to sort it and to create the index, one must call `samtools`[^2]:
+
+```bash
+samtools sort -m 3000M -@ 8 {SAMPLE-NAME}.bam > {SAMPLE-NAME}.sorted.bam
+samtools index {SAMPLE-NAME}.sorted.bam
+rm {SAMPLE-NAME}.bam
+```
+
+
+[^1]: STAR Aligner is compatible with Tuxedo software pipelines (Cufflinks)
+[^2]: http://www.htslib.org/
+
+## Read alignment quality control 
+
+This step ensures the quality of the alignment and the error rate of the aligner. There are different strategies to perform this step, either involving RSeQC (Wang et al. 2012) or DESeq2 (Love et al. 2014) [^3], as in the paper A. Buttgereit et al (2016). Herewith we present a pipeline requiring RSeQC to check the mapping rate of the reads, the mapped strand and the uniformity of read coverage on transcripts.
+
+The following steps must be performed for each `BAM` file in the folder `Map_STAR`:
+
+```bash
+bam_stat.py -i Map_STAR/{SAMPLE-NAME}.sorted.bam
+infer_experiment.py -r reference/gencode.vM3.chr_patch_hapl_scaff.annotation.bed -i Map_STAR/{SAMPLE-NAME}.sorted.bam
+geneBody_coverage.py -r reference/gencode.vM3.chr_patch_hapl_scaff.annotation.bed -i Map_STAR/ -o BamQC
+```
+
+The coverage should be homogeneous between the samples.
+
+
+[^3]: https://bioconductor.org/packages/release/bioc/html/DESeq2.html
+## Differential expression analysis
+
+### Pipeline 1 (RSeQC)
+#### Gene expression quantification
+
+We use `featureCounts` (Liao et al. 2014) to count the mapped reads for annotated genes, reversely stranded, allowing both multi-mapping and multi-overlapping reads:
+
+```bash
+cd ../
+mkdir Count_featureCounts
+featureCounts -T 8 -a reference/gencode.vM3.chr_patch_hapl_scaff.annotation.gtf --minOverlap 10 --primary -O -M -t exon -g gene_id -s 2 -o Count_featureCounts/counts.txt Map_STAR/*.bam
+```
+
+We show the example using the R bioconductor package `NOISeq` (Tarazona et al. 2015) to check the length bias and reproducibility among biological replicates.
+
+```R
+source("https://bioconductor.org/biocLite.R")
+biocLite("NOISeq")
+library(NOISeq)
+```
+
+Read in the count table, and convert it to a NOISeq object:
+
+```R
+# Reading counting table produced with FeautreCounts
+mytable<-read.table("Count_featureCounts/counts.txt", skip=1, header=TRUE)
+
+# Subsetting the table including only columns 7-12 (check if this is necessary)
+mycounts<-mytable[, c(7:12)]
+
+row.names(mycounts)<-mytable[, 1]
+colnames(mycounts)<-c("Sall1fl_fl_1", 
+                      "Sall1fl_fl_2", 
+                      "Sall1fl_fl_3", 
+                      "Sall1CreER_fl_1", 
+                      "Sall1CreER_fl_2", 
+                      "Sall1CreER_fl_3",
+                      "Cx3cr1CreER Sall1fl_fl_1")
+
+expConditions   <- c("Sall1fl_fl", 
+                     "Sall1fl_fl", 
+                     "Sall1fl_fl", 
+                     "Sall1CreER_fl", 
+                     "Sall1CreER_fl", 
+                     "Sall1CreER_fl",
+                     "Cx3cr1CreER Sall1fl_fl")
+                     
+expConditionRun <- c("Sall1fl_fl-run1", 
+                     "Sall1fl_fl-run2", 
+                     "Sall1fl_fl-run3", 
+                     "Sall1CreER_fl-run1", 
+                     "Sall1CreER_fl-run2", 
+                     "Sall1CreER_fl-run3",
+                     "Cx3cr1CreER Sall1fl_fl-run1")
+                     
+expRuns         <- c("run1", "run2","run3","run1","run2","run3","run1")
+
+myfactors = data.frame(condition=expConditions, 
+                       conditionrun=expConditionRun, 
+                       run=expRuns)
+
+# Assembly complete dataset
+mydata <- readData(data = mycounts, 
+                   factors=myfactors, 
+                   length = mytable[, c("Geneid", "Length")], 
+                   chromosome = mytable[, c("Chr", "Start", "End")])
+```
+
+Length bias:
+```R
+mylenbias = dat(mydata, type = "lengthbias")
+explo.plot(mylenbias)
+```
+
+Reproducibility among biological replicates:
+```R
+mypca=dat(mydata, type="PCA")
+explo.plot(mypca)
+```
+As expected, length bias of counts (longer genes have more counts) might be observed in all samples. Biological replicates of the same condition should cluster together in the Principal Component Analysis (PCA) plot.
+
+#### Differential expression analysis
+
+We show the example using the R bioconductor package edgeR (Robinson et al. 2010)
+
+```R
+source("https://bioconductor.org/biocLite.R")
+biocLite("edgeR")
+library(edgeR)
+```
+
+Read in the count table, and convert it to a edgeR object:
+```R
+
+y<-DGEList(counts=mycounts, group=expConditions, genes=mytable[, c("Geneid", "Length")])
+```
+
+Perform the integrated normalization method trimmed mean of M values (TMM) (Robinson and Oshlack 2010) :
+```R
+y<-calcNormFactors(y, method="TMM")
+```
+
+Estimate common dispersion:
+```R
+y<-estimateCommonDisp(y)
+```
+
+Estimate tagwise dispersion:
+```R
+y<-estimateTagwiseDisp(y)
+```
+
+Perform differential expression analysis between samples Sall1fl/fl and Sall1CreER/fl (repeat for the other combinations if necessary):
+```R
+et<-exactTest(y, pair=c("Sall1fl_fl", "Sall1CreER_fl"))
+res<-as.data.frame(topTags(et, n=37813)) # no idea about the value hardcoded here. 
+```
+
+Generate list of differentially expressed genes:
+```R
+rese2fold<-res(res$logFC>=1 | res$logFC<=-1, ]
+res2foldpadj<-res2fold[res2fold$FDR<=0.01, ]
+```
+
+
+### Pipeline 2 (DESeq2)
+
+```R
+#Sample tables
+
+expSampleNames  <- c("Sall1fl_fl_1", 
+                      "Sall1fl_fl_2", 
+                      "Sall1fl_fl_3", 
+                      "Sall1CreER_fl_1", 
+                      "Sall1CreER_fl_2", 
+                      "Sall1CreER_fl_3",
+                      "Cx3cr1CreER Sall1fl_fl_1")
+                      
+expFileNames    <- c("ERR1633606.sorted.bam",
+                     "ERR1633607.sorted.bam",
+                     "ERR1633608.sorted.bam",
+                     "ERR1633609.sorted.bam",
+                     "ERR1633610.sorted.bam",
+                     "ERR1633611.sorted.bam",
+                     "ERR1633612.sorted.bam")
+
+expConditions   <- c("Sall1fl_fl", 
+                     "Sall1fl_fl", 
+                     "Sall1fl_fl", 
+                     "Sall1CreER_fl", 
+                     "Sall1CreER_fl", 
+                     "Sall1CreER_fl",
+                     "Cx3cr1CreER Sall1fl_fl")
+                     
+expReplicates   <- c(1,2,3,1,2,3,1)
+
+
+
+
+sampleTable <- data.frame(sampleName  = expSampleNames,
+                          fileName    = expFileNames,
+                          conditions  = expConditions,
+                          replicates  = expReplicates)
+                          
+#This is how the sample table should look like
+sampleTable
+
+
+bamFiles <- file.path("./Map_STAR/", sampleTable$fileName )
+```
+
+#### Gene expression quantification
+
+This step requires the construction of gene models from the annotation files of the current reference genome built.
+
+```R
+library( "GenomicFeatures" )
+
+# Load GTF annotation file
+hse <- makeTranscriptDbFromGFF("gencode.vM3.chr_patch_hapl_scaff.annotation.gff3", format="gff" )
+
+#Extract exons for each gene
+exonsByGene <- exonsBy( hse, by="gene" )
+
+exonsByGene
+```
+
+#### Differential expression analysis
+
+Counting of reads in the alignments. We use the counting mode "Union", which indicates that those reads which overlap any portion of exactly one feature are counted. As this experiment produced single-end reads, we specify `singleEnd=TRUE`. As protocol was not strand-specific, we specify `ignore.strand=TRUE`.
+
+```R
+library( "GenomicAlignments" )
+
+se <- summarizeOverlaps(exonsByGene, BamFileList(bamFiles), mode="Union", singleEnd=TRUE, ignore.strand=TRUE)
+  
+BamFileList( bamFiles, yieldSize = 2000000 )
+
+# SummarizedExperiment
+se
+
+# Count data
+head( assay(se) )
+
+#Column sum
+colSums( assay(se) )
+
+#Phenotypic data
+colData(se)
+
+#Data about genes
+rowData(se)
+```
+
+[Pending]
+
+## References
+
+  1. http://master.bioconductor.org/help/workflows/rnaseqGene/#differential-expression-analysis
+  2. http://www-huber.embl.de/users/klaus/Teaching/DESeq2Predoc2014.html#quality-control-and-normalization-of-the-count-data
+  3. https://dwheelerau.com/2014/02/17/how-to-use-deseq2-to-analyse-rnaseq-data/
+  4. http://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/
+  5. https://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.pdf
+  6. http://www.sthda.com/english/wiki/rna-seq-differential-expression-work-flow-using-deseq2
